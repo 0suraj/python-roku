@@ -1,7 +1,7 @@
 import logging
-import requests
-
-from lxml import etree as ET
+import httplib
+import urllib
+import xmltodict
 from six.moves.urllib_parse import urlparse
 
 from . import discovery
@@ -103,15 +103,16 @@ class Application(object):
 
 class DeviceInfo(object):
 
-    def __init__(self, model_name, model_num, software_version, serial_num):
+    def __init__(self, model_name, model_num, software_version, serial_num, user_device_name):
         self.model_name = model_name
         self.model_num = model_num
         self.software_version = software_version
         self.serial_num = serial_num
+        self.user_device_name = user_device_name
 
     def __repr__(self):
-        return ('<DeviceInfo: %s-%s, SW v%s, Ser# %s>' %
-                (self.model_name, self.model_num,
+        return ('<Device: %s Info: %s-%s, SW v%s, Ser# %s>' %
+                (self.user_device_name, self.model_name, self.model_num,
                  self.software_version, self.serial_num))
 
 
@@ -170,34 +171,24 @@ class Roku(object):
             if app.id == app_id:
                 return app
 
-    def _connect(self):
-        if self._conn is None:
-            self._conn = requests.Session()
+    def _get(self, path, params = ''):
+        return self._call('GET', path, params)
 
-    def _get(self, path, *args, **kwargs):
-        return self._call('GET', path, *args, **kwargs)
+    def _post(self, path, params = ''):
+        return self._call('POST', path, params)
 
-    def _post(self, path, *args, **kwargs):
-        return self._call('POST', path, *args, **kwargs)
-
-    def _call(self, method, path, *args, **kwargs):
-
-        self._connect()
-
-        roku_logger.debug(path)
-
-        url = 'http://%s:%s%s' % (self.host, self.port, path)
-
+    def _call(self, method, path, params = ''):
         if method not in ('GET', 'POST'):
             raise ValueError('only GET and POST HTTP methods are supported')
+        conn = httplib.HTTPConnection(self.host, self.port)
+        conn.request(method, path, urllib.urlencode(params));
+        resp = conn.getresponse()
+        msg = resp.read()
+        conn.close()
+        if resp.status != 200:
+            raise RokuException(msg)
 
-        func = getattr(self._conn, method.lower())
-        resp = func(url, *args, **kwargs)
-
-        if resp.status_code != 200:
-            raise RokuException(resp.content)
-
-        return resp.content
+        return msg
 
     @property
     def apps(self):
@@ -219,17 +210,18 @@ class Roku(object):
     @property
     def device_info(self):
         resp = self._get('/query/device-info')
-        root = ET.fromstring(resp)
+        root = xmltodict.parse(resp)['device-info']
 
         dinfo = DeviceInfo(
-            model_name=root.find('model-name').text,
-            model_num=root.find('model-number').text,
+            model_name=root['model-name'].encode('UTF-8'),
+            model_num=root['model-number'].encode('UTF-8'),
+            user_device_name=root['user-device-name'].encode('UTF-8'),
             software_version=''.join([
-                root.find('software-version').text,
+                root['software-version'].encode('UTF-8'),
                 '.',
-                root.find('software-build').text
+                root['software-build'].encode('UTF-8')
             ]),
-            serial_num=root.find('serial-number').text
+            serial_num=root['serial-number'].encode('UTF-8')
         )
         return dinfo
 
@@ -243,13 +235,13 @@ class Roku(object):
     def launch(self, app):
         if app.roku and app.roku != self:
             raise RokuException('this app belongs to another Roku')
-        return self._post('/launch/%s' % app.id, params={'contentID': app.id})
+        return self._post('/launch/%s' % app.id, {'contentID': app.id})
 
     def store(self, app):
-        return self._post('/launch/11', params={'contentID': app.id})
+        return self._post('/launch/11', {'contentID': app.id})
 
     def input(self, params):
-        return self._post('/input', params=params)
+        return self._post('/input', params)
 
     def touch(self, x, y, op='down'):
 
