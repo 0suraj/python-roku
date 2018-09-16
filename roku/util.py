@@ -12,7 +12,7 @@ def deserialize_apps(doc, roku=None):
     root = xmltodict.parse(doc)['apps']['app']
     for elem in root:
         app = Application(
-            id=elem['@id'].encode('UTF-8'), version=elem['@version'].encode('UTF-8'), name=elem['#text'].encode('UTF-8'))
+            id=elem['@id'].encode('UTF-8').lower(), version=elem['@version'].encode('UTF-8'), name=elem['#text'].encode('UTF-8').lower())
         applications.append(app)
     return applications
 

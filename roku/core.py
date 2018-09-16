@@ -162,13 +162,15 @@ class Roku(object):
         return app
 
     def _app_for_name(self, name):
+        lname = name.lower()
         for app in self.apps:
-            if app.name == name:
+            if app.name == lname:
                 return app
 
     def _app_for_id(self, app_id):
+        lapp_id = app_id
         for app in self.apps:
-            if app.id == app_id:
+            if app.id == lapp_id:
                 return app
 
     def _get(self, path, params = ''):
