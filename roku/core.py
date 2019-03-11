@@ -103,7 +103,7 @@ class Application(object):
 
 class DeviceInfo(object):
 
-    def __init__(self, model_name, model_num, software_version, serial_num, user_device_name):
+    def __init__(self, model_name = '', model_num = '', software_version = '', serial_num = '', user_device_name = ''):
         self.model_name = model_name
         self.model_num = model_num
         self.software_version = software_version
@@ -182,7 +182,7 @@ class Roku(object):
     def _call(self, method, path, params = ''):
         if method not in ('GET', 'POST'):
             raise ValueError('only GET and POST HTTP methods are supported')
-        conn = httplib.HTTPConnection(self.host, self.port)
+        conn = httplib.HTTPConnection(self.host, self.port, timeout=5)
         conn.request(method, path, urllib.urlencode(params));
         resp = conn.getresponse()
         msg = resp.read()
@@ -211,19 +211,23 @@ class Roku(object):
 
     @property
     def device_info(self):
-        resp = self._get('/query/device-info')
+        try:
+            resp = self._get('/query/device-info')
+        except:
+            return DeviceInfo()
+
         root = xmltodict.parse(resp)['device-info']
 
         dinfo = DeviceInfo(
             model_name=root['model-name'].encode('UTF-8'),
             model_num=root['model-number'].encode('UTF-8'),
-            user_device_name=root['user-device-name'].encode('UTF-8'),
             software_version=''.join([
                 root['software-version'].encode('UTF-8'),
                 '.',
                 root['software-build'].encode('UTF-8')
             ]),
-            serial_num=root['serial-number'].encode('UTF-8')
+            serial_num=root['serial-number'].encode('UTF-8'),
+            user_device_name=root['user-device-name'].encode('UTF-8')
         )
         return dinfo
 
